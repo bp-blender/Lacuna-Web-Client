@@ -1,6 +1,8 @@
 'use strict';
 
 var React = require('react');
+var Reflux = require('reflux');
+var util = require('js/util');
 
 var LeftSidebarActions = require('js/actions/menu/leftSidebar');
 
@@ -10,6 +12,8 @@ var NotesActions = require('js/actions/window/notes');
 var OptionsActions = require('js/actions/window/options');
 var ServerClockActions = require('js/actions/window/serverClock');
 
+var EmpireRPCStore = require('js/stores/rpc/empire');
+
 var toggle = function(callback) {
     return function() {
         LeftSidebarActions.toggle();
@@ -18,6 +22,9 @@ var toggle = function(callback) {
 }
 
 var LeftSidebar = React.createClass({
+    mixins: [
+        Reflux.connect(EmpireRPCStore, 'empire')
+    ],
     render: function() {
         return (
             <div className="ui left vertical inverted sidebar menu">
@@ -90,9 +97,49 @@ var LeftSidebar = React.createClass({
                     Refresh
                 </a>
 
+                <div className="ui horizontal inverted divider">
+                    Self Destruct
+                </div>
+
+                <a className="item" onClick={this.onClickSelfDestruct} style={ this.state.empire.self_destruct_active === 1 ? {"color":"red"} : {} }>
+                     <i className="bomb icon"></i>
+                { this.state.empire.self_destruct_active ? "Disable" : "Enable" } Self Destruct
+                {
+                    this.state.empire.self_destruct_active ?
+                        <p style={{margin:0}}>SELF DESTRUCT ACTIVE</p> : ''
+                }
+                {
+                        this.state.empire.self_destruct_active && this.state.empire.self_destruct_ms > 0 ?
+                         <p style={{"text-align":"right !important"}}> { util.formatMillisecondTime(this.state.empire.self_destruct_ms) } </p> : ''
+                }
+                </a>
+
             </div>
         );
-    }
+    },
+    onClickSelfDestruct : function() {
+        var Game = YAHOO.lacuna.Game;
+        var EmpireServ = Game.Services.Empire;
+        var func;
+        if(this.state.empire.self_destruct_active === 1) {
+            func = EmpireServ.disable_self_destruct;
+        }
+        else if (confirm("Are you certain you want to enable self destuct?  If enabled, your empire will be deleted after 24 hours.")) {
+            func = EmpireServ.enable_self_destruct;
+        }
+        else {
+            return;
+        }
+        require('js/actions/menu/loader').show();
+        func({session_id:Game.GetSession()}, {
+            success : function(o) {
+                Game.ProcessStatus(o.result.status);
+                require('js/actions/menu/loader').hide();
+            }
+        });
+
+        LeftSidebarActions.toggle();
+    },
 });
 
 //                <a className="item" onClick={toggle(NotesActions.show)}>
